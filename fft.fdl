@@ -1,0 +1,209 @@
+ipblock myarm{
+    iptype "armsystem";
+    ipparm "exec=fft";
+    ipparm "period=1";
+}
+
+ipblock arm_bit_reversal_inner_loop_in_k(out data : ns(64)){
+    iptype "armsystemsource";
+    ipparm "core=myarm";
+    ipparm "address=0x80000000";
+}
+
+ipblock arm_bit_reversal_inner_loop_in_j(out data : ns(64)){
+    iptype "armsystemsource";
+    ipparm "core=myarm";
+    ipparm "address=0x80000008";
+}
+
+ipblock arm_bit_reversal_inner_loop_out_k(in data : ns(64)){
+    iptype "armsystemsink";
+    ipparm "core=myarm";
+    ipparm "address=0x80000010";
+}
+
+ipblock arm_bit_reversal_inner_loop_out_j(in data : ns(64)){
+    iptype "armsystemsink";
+    ipparm "core=myarm";
+    ipparm "address=0x80000018";
+}
+
+ipblock arm_bit_reversal_inner_loop_load(out data : ns(1)){
+    iptype "armsystemsource";
+    ipparm "core=myarm";
+    ipparm "address=0x80000020";
+}
+
+ipblock arm_bit_reversal_inner_loop_done(in data : ns(1)){
+    iptype "armsystemsink";
+    ipparm "core=myarm";
+    ipparm "address=0x80000024";
+}
+
+
+
+ipblock arm_fixed_point_mult_add_in_a(out data : ns(64)){
+    iptype "armsystemsource";
+    ipparm "core=myarm";
+    ipparm "address=0x80000028";
+}
+
+ipblock arm_fixed_point_mult_add_in_b(out data : ns(64)){
+    iptype "armsystemsource";
+    ipparm "core=myarm";
+    ipparm "address=0x80000030";
+}
+
+ipblock arm_fixed_point_mult_add_in_c(out data : ns(64)){
+    iptype "armsystemsource";
+    ipparm "core=myarm";
+    ipparm "address=0x80000038";
+}
+
+ipblock arm_fixed_point_mult_add_in_d(out data : ns(64)){
+    iptype "armsystemsource";
+    ipparm "core=myarm";
+    ipparm "address=0x80000040";
+}
+
+ipblock arm_fixed_point_mult_add_out(in data : ns(64)){
+    iptype "armsystemsink";
+    ipparm "core=myarm";
+    ipparm "address=0x80000048";
+}
+
+ipblock arm_fixed_point_mult_add_sign(in data : ns(1)){
+    iptype "armsystemsink";
+    ipparm "core=myarm";
+    ipparm "address=0x80000050";
+}
+
+ipblock arm_fixed_point_mult_add_load(out data : ns(1)){
+    iptype "armsystemsource";
+    ipparm "core=myarm";
+    ipparm "address=0x80000054";
+}
+
+ipblock arm_fixed_point_mult_add_done(in data : ns(1)){
+    iptype "armsystemsink";
+    ipparm "core=myarm";
+    ipparm "address=0x80000058";
+}
+
+
+
+dp bit_reversal_inner_loop_dp(
+    in  k_in   :   ns(64);
+    in  j_in   :   ns(64);
+    in  load:   ns(1);
+    out o_k :   ns(64);
+    out o_j :   ns(64);
+    out done:   ns(1)
+) {
+    reg k, j: ns(64);
+
+    always {
+        o_k = k;
+        o_j = j;
+    }
+
+    sfg ready {
+        done = 0;
+    }
+
+    sfg init {
+        k = k_in;
+        j = j_in;
+        done = 0;
+    }
+
+    sfg loop {
+        j = j - k;
+        k = k >> 1;
+        done = 0;
+    }
+
+    sfg last {
+        j = j + k;
+    }
+
+    sfg outp_idle {
+
+        done = 1;
+    }
+
+    sfg log {
+        $display("bit_reversal_inner_loop: ", "cycle=", $cycle, " k=", k, " j=", j, " load=", load, " o_k=", o_k, " o_j=", o_j, " done=", done);
+    }
+}
+
+fsm bit_reversal_inner_loop_fsm(bit_reversal_inner_loop_dp) {
+    initial s0;
+    state s1, s2;
+    @s0
+        if (load) then (init) -> s1;
+        else (ready) -> s0;
+    @s1
+        if (k > j) then (last, outp_idle) -> s2;
+        else (loop, log) -> s1;
+    @s2
+        if (load) then (outp_idle) -> s2;
+        else (ready) -> s0;
+}
+
+
+dp fixed_point_mult_add_dp (
+    in  a   :   tc(64);
+    in  b   :   tc(64);
+    in  c   :   tc(64);
+    in  d   :   tc(64);
+    in  load:   ns(1);
+    out o   :   tc(64);
+    out sign:   ns(1);
+    out done:   ns(1)
+) {
+
+    always {
+        o = load == 1 ? a * b + c * d : 0;
+        done = load == 1 ? 1 : 0;
+        sign = (o < 0);
+    }
+
+}
+
+
+
+dp top() {
+    sig bit_reversal_inner_loop_in_k, bit_reversal_inner_loop_in_j   : ns(64);
+    sig bit_reversal_inner_loop_out_k, bit_reversal_inner_loop_out_j : ns(64);
+    sig bit_reversal_inner_loop_load, bit_reversal_inner_loop_done   : ns(1);
+
+    sig fixed_point_mult_add_in_a, fixed_point_mult_add_in_b, fixed_point_mult_add_in_c, fixed_point_mult_add_in_d, fixed_point_mult_add_out : ns(64);
+    sig fixed_point_mult_add_load, fixed_point_mult_add_done, fixed_point_mult_add_sign : ns(1);
+
+    use myarm;
+
+    use arm_bit_reversal_inner_loop_in_k(bit_reversal_inner_loop_in_k);
+    use arm_bit_reversal_inner_loop_in_j(bit_reversal_inner_loop_in_j);
+    use arm_bit_reversal_inner_loop_out_k(bit_reversal_inner_loop_out_k);
+    use arm_bit_reversal_inner_loop_out_j(bit_reversal_inner_loop_out_j);
+    use arm_bit_reversal_inner_loop_load(bit_reversal_inner_loop_load);
+    use arm_bit_reversal_inner_loop_done(bit_reversal_inner_loop_done);
+
+    use arm_fixed_point_mult_add_in_a(fixed_point_mult_add_in_a);
+    use arm_fixed_point_mult_add_in_b(fixed_point_mult_add_in_b);
+    use arm_fixed_point_mult_add_in_c(fixed_point_mult_add_in_c);
+    use arm_fixed_point_mult_add_in_d(fixed_point_mult_add_in_d);
+    use arm_fixed_point_mult_add_out(fixed_point_mult_add_out);
+    use arm_fixed_point_mult_add_sign(fixed_point_mult_add_sign);
+    use arm_fixed_point_mult_add_load(fixed_point_mult_add_load);
+    use arm_fixed_point_mult_add_done(fixed_point_mult_add_done);
+
+    use bit_reversal_inner_loop_dp(bit_reversal_inner_loop_in_k, bit_reversal_inner_loop_in_j, bit_reversal_inner_loop_load, bit_reversal_inner_loop_out_k, bit_reversal_inner_loop_out_j, bit_reversal_inner_loop_done);
+   
+    use fixed_point_mult_add_dp(fixed_point_mult_add_in_a, fixed_point_mult_add_in_b, fixed_point_mult_add_in_c, fixed_point_mult_add_in_d, fixed_point_mult_add_load, fixed_point_mult_add_out, fixed_point_mult_add_sign, fixed_point_mult_add_done);
+}
+
+system S {
+    top;
+}
