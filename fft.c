@@ -159,7 +159,7 @@ int main()
     FFT(bufr, bufi);
     show("\nFFT:\n", bufr, bufi);
 
-    getchar();
+    //getchar();
 
     return ret_val;
 }
